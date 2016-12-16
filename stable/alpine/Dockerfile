@@ -3,6 +3,9 @@ FROM alpine:3.4
 MAINTAINER NGINX Docker Maintainers "docker-maint@nginx.com"
 
 ENV NGINX_VERSION 1.10.2
+ENV NGINX_DEVKIT_VERSION 0.3.0
+ENV NGINX_LUA_VERSION 0.10.7
+ENV LUAJIT_VERSION 2.0.3
 
 RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	&& CONFIG="\
@@ -21,6 +24,8 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		--http-scgi-temp-path=/var/cache/nginx/scgi_temp \
 		--user=nginx \
 		--group=nginx \
+		--add-module=/usr/src/ngx_devel_kit-$NGINX_DEVKIT_VERSION \
+		--add-module=/usr/src/lua-nginx-module-$NGINX_LUA_VERSION \
 		--with-http_ssl_module \
 		--with-http_realip_module \
 		--with-http_addition_module \
@@ -64,15 +69,27 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 		gd-dev \
 		geoip-dev \
 		perl-dev \
+		lua-dev \
 	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz -o nginx.tar.gz \
 	&& curl -fSL http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz.asc  -o nginx.tar.gz.asc \
+	&& curl -fSL http://luajit.org/download/LuaJIT-$LUAJIT_VERSION.tar.gz -o luajit.tar.gz \
+	&& curl -fSL https://github.com/simpl/ngx_devel_kit/archive/v$NGINX_DEVKIT_VERSION.tar.gz -o ngx_devel_kit.tar.gz \
+	&& curl -fSL https://github.com/openresty/lua-nginx-module/archive/v$NGINX_LUA_VERSION.tar.gz -o lua_nginx_module.tar.gz \
 	&& export GNUPGHOME="$(mktemp -d)" \
 	&& gpg --keyserver ha.pool.sks-keyservers.net --recv-keys "$GPG_KEYS" \
 	&& gpg --batch --verify nginx.tar.gz.asc nginx.tar.gz \
 	&& rm -r "$GNUPGHOME" nginx.tar.gz.asc \
 	&& mkdir -p /usr/src \
 	&& tar -zxC /usr/src -f nginx.tar.gz \
+	&& tar -xzC /usr/src -f luajit.tar.gz \
+	&& tar -xzC /usr/src -f ngx_devel_kit.tar.gz \
+	&& tar -xzC /usr/src -f lua_nginx_module.tar.gz \
 	&& rm nginx.tar.gz \
+	&& rm luajit.tar.gz \
+	&& rm ngx_devel_kit.tar.gz \
+	&& rm lua_nginx_module.tar.gz \
+	&& cd /usr/src/LuaJIT-$LUAJIT_VERSION \
+	&& make && make install \
 	&& cd /usr/src/nginx-$NGINX_VERSION \
 	&& ./configure $CONFIG --with-debug \
 	&& make -j$(getconf _NPROCESSORS_ONLN) \
@@ -97,7 +114,7 @@ RUN GPG_KEYS=B0F4253373F8F6F510D42178520A9993A1C052F8 \
 	&& ln -s ../../usr/lib/nginx/modules /etc/nginx/modules \
 	&& strip /usr/sbin/nginx* \
 	&& strip /usr/lib/nginx/modules/*.so \
-	&& rm -rf /usr/src/nginx-$NGINX_VERSION \
+	&& rm -rf /usr/src \
 	\
 	# Bring in gettext so we can get `envsubst`, then throw
 	# the rest away. To do this, we need to install `gettext`
